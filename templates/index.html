@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoGen Debate System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Debate Platform: Collaborative Agent Discourse</h1>
+            <p>Enter a topic and watch AI agents research, debate, and summarize it in real-time!</p>
+        </header>
+
+        <div class="input-section">
+            <input type="text" id="topicInput" placeholder="Enter debate topic (e.g., 'Is homeschooling effective?')">
+            <button onclick="startDebate()">Start Debate</button>
+            <button onclick="stopDebate()" class="stop-btn">Stop Debate</button>
+        </div>
+
+        <div class="chat-container">
+            <div id="chatMessages" class="chat-messages"></div>
+        </div>
+
+        <div class="status-bar">
+            <span id="status">🟢 Ready to debate...</span>
+            <span id="messageCount">Messages: 0</span>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const chatMessages = document.getElementById('chatMessages');
+        const statusElement = document.getElementById('status');
+        const messageCountElement = document.getElementById('messageCount');
+        let messageCount = 0;
+
+        socket.on('connect', () => {
+            updateStatus('Connected to server', 'green');
+        });
+
+        socket.on('agent_message', (data) => {
+            addMessage(data.sender, data.content);
+            messageCount++;
+            messageCountElement.textContent = `Messages: ${messageCount}`;
+        });
+
+        socket.on('debate_complete', (data) => {
+            updateStatus(data.status === 'success' ? '✅ Debate completed!' : '❌ Debate failed', 
+                        data.status === 'success' ? 'green' : 'red');
+        });
+
+        function addMessage(sender, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            
+            const senderSpan = document.createElement('span');
+            senderSpan.className = 'sender';
+            senderSpan.textContent = sender + ':';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+            
+            // Handle content formatting
+            if (typeof content === 'object' && content !== null) {
+                contentDiv.textContent = JSON.stringify(content, null, 2);
+            } else {
+                contentDiv.textContent = content;
+            }
+            
+            messageDiv.appendChild(senderSpan);
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            // Auto-scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateStatus(message, color = 'black') {
+            statusElement.textContent = message;
+            statusElement.style.color = color;
+        }
+
+        function startDebate() {
+            const topic = document.getElementById('topicInput').value.trim();
+            if (!topic) {
+                alert('Please enter a debate topic');
+                return;
+            }
+
+            // Clear previous messages
+            chatMessages.innerHTML = '';
+            messageCount = 0;
+            messageCountElement.textContent = 'Messages: 0';
+            updateStatus('🚀 Starting debate...', 'blue');
+            
+            addMessage('System', `Starting debate on: ${topic}`);
+            
+            fetch('/start_debate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ topic: topic })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    updateStatus('❌ Error starting debate', 'red');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                updateStatus('❌ Error starting debate', 'red');
+            });
+        }
+
+        function stopDebate() {
+            fetch('/stop_debate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                updateStatus('⏹️ Debate stopped', 'orange');
+            });
+        }
+
+        // Allow Enter key to start debate
+        document.getElementById('topicInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startDebate();
+            }
+        });
+    </script>
+</body>
+</html>
